@@ -1,0 +1,156 @@
+import os
+import pandas as pd
+from supabase import create_client, Client
+
+
+def get_supabase_client() -> Client:
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        raise RuntimeError(
+            "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません。"
+        )
+    return create_client(url, key)
+
+
+def add_model(df: pd.DataFrame, supabase: Client) -> None:
+    """--- モデルの登録 (models) ---"""
+    models = df["model"].dropna().unique().tolist()
+    if not models:
+        print("モデルなし")
+        return
+
+    # UNIQUE(models.name) 前提で upsert
+    rows = [{"name": m} for m in models]
+    supabase.table("models").upsert(rows, on_conflict="name").execute()
+    print(f"モデル upsert: {len(rows)} 件（新規/既存含む）")
+
+
+def add_prefecture_and_hall(df: pd.DataFrame, supabase: Client) -> None:
+    """--- 都道府県(prefectures) と ホール(halls) 登録 ---"""
+    prefectures = df["pref"].dropna().unique().tolist()
+    if not prefectures:
+        print("pref カラムが空です。")
+        return
+
+    # 1) prefectures upsert
+    pref_rows = [{"name": p} for p in prefectures]
+    supabase.table("prefectures").upsert(pref_rows, on_conflict="name").execute()
+    print(f"都道府県 upsert: {len(pref_rows)} 件")
+
+    # 2) prefecture_id を取得してマップ化
+    pref_res = supabase.table("prefectures").select("prefecture_id, name").execute()
+    pref_map = {row["name"]: row["prefecture_id"] for row in pref_res.data}
+
+    # 3) halls upsert（name + prefecture_id をユニークキー想定）
+    hall_rows = []
+    for pref in prefectures:
+        pid = pref_map.get(pref)
+        if not pid:
+            print(f"⚠ prefecture_id 取得失敗: {pref}")
+            continue
+        halls = df.loc[df["pref"] == pref, "hall"].dropna().unique().tolist()
+        for hall in halls:
+            hall_rows.append({"name": hall, "prefecture_id": pid})
+
+    if hall_rows:
+        supabase.table("halls").upsert(
+            hall_rows,
+            on_conflict="name,prefecture_id",
+        ).execute()
+        print(f"ホール upsert: {len(hall_rows)} 件")
+    else:
+        print("ホールなし")
+
+
+def add_data_result(df: pd.DataFrame, supabase: Client) -> None:
+    """--- results テーブルへデータ登録 ---"""
+
+    # 1) 最新の prefectures / halls / models を取得して ID マップを作る
+    pref_res = supabase.table("prefectures").select("prefecture_id, name").execute()
+    hall_res = supabase.table("halls").select("hall_id, name, prefecture_id").execute()
+    model_res = supabase.table("models").select("model_id, name").execute()
+
+    pref_map = {p["name"]: p["prefecture_id"] for p in pref_res.data}
+    # (pref, hall) -> hall_id
+    hall_map = {(h["prefecture_id"], h["name"]): h["hall_id"] for h in hall_res.data}
+    model_map = {m["name"]: m["model_id"] for m in model_res.data}
+
+    # 2) DataFrame から results 用レコードを作成
+    records = []
+    for _, row in df.iterrows():
+        pref = row["pref"]
+        hall_name = row["hall"]
+        model_name = row["model"]
+
+        pid = pref_map.get(pref)
+        if not pid:
+            print(f"⚠ prefecture_id なし: {pref}")
+            continue
+
+        hall_id = hall_map.get((pid, hall_name))
+        if not hall_id:
+            print(f"⚠ hall_id なし: {pref} / {hall_name}")
+            continue
+
+        model_id = model_map.get(model_name)
+        if not model_id:
+            print(f"⚠ model_id なし: {model_name}")
+            continue
+
+        try:
+            unit_no = int(row["unit_no"])
+            game = int(row["game"])
+            bb = int(row["bb"])
+            rb = int(row["rb"])
+            medal = int(row["medal"])
+        except (TypeError, ValueError):
+            print(f"⚠ 数値変換エラー: {row}")
+            continue
+
+        records.append(
+            {
+                "hall_id": hall_id,
+                "model_id": model_id,
+                "unit_no": unit_no,
+                "date": str(row["date"]),  # 'YYYY-MM-DD' 文字列でOK
+                "game": game,
+                "bb": bb,
+                "rb": rb,
+                "medal": medal,
+            }
+        )
+
+    if not records:
+        print("results に挿入するデータがありません。")
+        return
+
+    # 3) 一括 upsert（unique(hall_id, model_id, unit_no, date) を想定）
+    #    行数が多い場合はバッチに分けるとよい
+    batch_size = 500
+    inserted = 0
+    for i in range(0, len(records), batch_size):
+        batch = records[i : i + batch_size]
+        supabase.table("results").upsert(
+            batch,
+            on_conflict="hall_id,model_id,unit_no,date",
+        ).execute()
+        inserted += len(batch)
+
+    print(f"results upsert: {inserted} 件（新規/既存含む）")
+
+
+def main():
+    CSV_PATH = "data/csv/halls_date_cleaner.csv"
+
+    df = pd.read_csv(CSV_PATH)
+
+    supabase = get_supabase_client()
+
+    add_model(df, supabase)
+    add_prefecture_and_hall(df, supabase)
+    add_data_result(df, supabase)
+
+
+if __name__ == "__main__":
+    main()

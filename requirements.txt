@@ -2,4 +2,5 @@ playwright
 beautifulsoup4
 pandas
 pyyaml
+supabase
 colorlog

@@ -216,5 +216,8 @@ __marimo__/
 *out*
 
 trash/
-
-.venv
+.venv/
+secret.json
+notebooks/
+db/
+data/csv/
