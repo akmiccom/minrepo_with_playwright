@@ -1,0 +1,2 @@
+# minrepo_with_playwright
+スロットデータを収集して分析するツール
