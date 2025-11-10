@@ -1,9 +1,9 @@
 name: scrape-minrepo
 
 on:
-  schedule:
-    # UTC基準。JST 03:05 は 前日の 18:05 UTC
-    - cron: "0 21 * * *" # 日本時間6：00
+  # schedule:
+  #   # UTC基準。JST 03:05 は 前日の 18:05 UTC
+  #   - cron: "0 21 * * *" # 日本時間6：00
   workflow_dispatch: {} # 手動実行ボタン
 
 permissions:

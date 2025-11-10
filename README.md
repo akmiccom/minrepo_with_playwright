@@ -10,6 +10,7 @@
 
 ## フォルダ構成
 
+<pre>
 C:.
 │  .gitignore
 │  README.md
@@ -43,4 +44,4 @@ C:.
 │      
 └─utils
         create_databese.py
-
+</pre>
