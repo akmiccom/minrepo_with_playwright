@@ -106,16 +106,16 @@ def main(test_mode=False) -> pd.DataFrame:
 
 if __name__ == "__main__":
     
-    df = main(test_mode=False)
+    df = main(test_mode=True)
     df = df_data_clean(df)
     
-    conn = sqlite3.connect(config.DB_PATH)
-    cursor = conn.cursor()
+    # conn = sqlite3.connect(config.DB_PATH)
+    # # cursor = conn.cursor()
 
-    df_to_db.add_model(df, conn, cursor)
-    df_to_db.add_prefecture_and_hall(df, conn, cursor)
-    df_to_db.add_data_result(conn, cursor, df)
+    # # df_to_db.add_model(df, conn, cursor)
+    # # df_to_db.add_prefecture_and_hall(df, conn, cursor)
+    # # df_to_db.add_data_result(conn, cursor, df)
     
-    conn.commit()
-    conn.close()
+    # # conn.commit()
+    # # conn.close()
     
