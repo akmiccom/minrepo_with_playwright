@@ -43,8 +43,8 @@ jobs:
           # SCRAPER_UA: ${{ secrets.SCRAPER_UA }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          python -m scraper.main
+        run: python scraper/scraper.py
+          # python -m scraper.main
   
       # デバッグ用成果物（失敗時も拾う）
       - name: Upload artifacts (logs/screens)
